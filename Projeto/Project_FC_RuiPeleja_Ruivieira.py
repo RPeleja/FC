@@ -247,7 +247,7 @@ def plot_schedule(model, processing_time, machines, jobs):
 
 # Solvers to try
 solvers = ['glpk', 'gurobi', 'ipopt', 'neos']  # Add or remove solvers as needed
-solver_num = 3
+solver_num = 0
 solver_name = solvers[solver_num]  # Change this to try different solvers
 # Objective Function
 model.objective = Objective(expr=model.makespan, sense=minimize)
@@ -260,7 +260,7 @@ if solver_num != 3:
             print(f"Solver '{solver_name}' not found. Skipping.")
 
         if solver_num == 0:  # GLPK
-            results = solver.solve(model, tee=True, options={'mipgap': 0.000001, 'tmlim': 500}) 
+            results = solver.solve(model, tee=True, options={'mipgap': 0.00001, 'tmlim': 900}) 
             # Note the tmlim, not timelimit.
             # mipgap option is essential for controlling the trade-off between solution quality and solution time. It allows you to get good, near-optimal solutions within a reasonable time frame.
         else: 
