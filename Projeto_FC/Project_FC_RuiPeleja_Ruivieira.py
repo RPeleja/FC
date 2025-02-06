@@ -1,9 +1,9 @@
 from pyomo.environ import *
-from pyomo.opt import SolverFactory
+from pyomo.opt import SolverFactory, SolverManagerFactory
+from pyomo.contrib.satsolver.satsolver import SMTSatSolver
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
-import pyscipopt
 import os
 
 # provide an email address
@@ -81,9 +81,8 @@ model.O = Set(initialize=[(job, operation) for job in jobs for operation in rang
 processing_time = {(job, op, m): t for job in jobs for op, times in enumerate(jobs[job]) for m, t in times}
 
 # Decision Variables
-model.start_time = Var(model.O, within=NonNegativeReals, doc="Start time of each operation")
+model.start_time = Var(model.O, within=NonNegativeIntegers, doc="Start time of each operation")
 model.assignment = Var(model.O, model.M, within=Binary, doc="Assignment of operations to machines")
-#model.makespan = Var(within=NonNegativeReals, doc="Makespan of the schedule")
 model.makespan = Var(within=Integers, doc="Makespan of the schedule")
 
 # Constraints
@@ -114,17 +113,22 @@ M = max_processing_time * total_operations  # More realistic Big-M
 # New binary variable for tracking precedence
 model.precedence = Var(model.O, model.O, within=Binary, doc="Binary variable to track precedence between operations")
 
+# Prevent overlap using big-M method for constraint activation
+
+# Precedence_no_overlap_rule ensures that if a precedence exists, the earlier operation must finish before the later one starts.
 def precedence_no_overlap_rule(model, j1, o1, j2, o2, m):
     if (j1, o1) < (j2, o2) and j1 != j2 and (j1, o1, m) in processing_time and (j2, o2, m) in processing_time:
 
-        # Prevent overlap if different jobs assigned to the same machine
+        # Removes the constraint when precedence, assignment1, or assignment2 are not satisfied.
+        # j1 o1 must finish before j2 o2 starts + processing time of j2 - large negative adjustment that effectively deactivates the constraint under certain conditions
         return model.start_time[j2, o2] >= model.start_time[j1, o1] + processing_time[j1, o1, m] - (3 - model.precedence[j1, o1, j2, o2] - model.assignment[j1, o1, m] - model.assignment[j2, o2, m] ) * M
     return Constraint.Skip
 
+# Precedence_no_overlap_no_precedence_rule ensures that if there is no precedence, an operation cannot start before another one finishes.
 def precedence_no_overlap_no_precedence_rule(model, j1, o1, j2, o2, m):
     if (j1, o1) < (j2, o2) and j1 != j2 and (j1, o1, m) in processing_time and (j2, o2, m) in processing_time:
 
-        # Prevent overlap if different jobs assigned to the same machine
+        # This ensures that if precedence = 0, the constraint forces (j1, o1) to start after (j2, o2) finishes.
         return model.start_time[j1, o1] >= model.start_time[j2, o2] + processing_time[j2, o2, m] - (2 + model.precedence[j1, o1, j2, o2] - model.assignment[j1, o1, m] - model.assignment[j2, o2, m] ) * M
     return Constraint.Skip
 
@@ -133,6 +137,7 @@ model.Precedence_No_Overlap = Constraint(model.O, model.O, model.M, rule=precede
 model.Precedence_No_OverlapWithoutPrecedences = Constraint(model.O, model.O, model.M, rule=precedence_no_overlap_no_precedence_rule)
 
 # 4. Makespan definition
+# This constraint ensures that the makespan is always greater than or equal to every operation's start time + processing time
 def makespan_rule(model, j, o):
     return model.makespan >= model.start_time[j, o] + sum(
         model.assignment[j, o, m] * processing_time[j, o, m] for m in model.M if (j, o, m) in processing_time
@@ -245,41 +250,66 @@ def plot_schedule(model, processing_time, machines, jobs):
     plt.tight_layout()
     return fig
 
-# Solvers to try
-solvers = ['glpk', 'gurobi', 'ipopt', 'neos']  # Add or remove solvers as needed
-solver_num = 0
-solver_name = solvers[solver_num]  # Change this to try different solvers
+# Solvers to try -> IPOPT does not support integer constraints.
+solvers = ['glpk', 'gurobi', 'ipopt', 'neos', 'z3']  # Add or remove solvers as needed
+
+# Prompt the user to select a solver
+print("Available Solvers:")
+for i, solver in enumerate(solvers):
+    print(f"{i}: {solver}")
+
+while True:
+    try:
+        solver_num = int(input("Select a solver number: "))
+        if 0 <= solver_num < len(solvers):
+            break
+        else:
+            print(f"Please enter a number between 0 and {len(solvers) - 1}.")
+    except ValueError:
+        print("Invalid input. Please enter a valid number.")
+
+solver_name = solvers[solver_num]  # Assign selected solver
+
 # Objective Function
 model.objective = Objective(expr=model.makespan, sense=minimize)
 
-if solver_num != 3:
-    try:
+try:
+    if solver_num != 3 and solver_num < 4:
         solver = SolverFactory(solver_name)
-
         if solver is None:  # Check if the solver is available
             print(f"Solver '{solver_name}' not found. Skipping.")
 
-        if solver_num == 0:  # GLPK
-            results = solver.solve(model, tee=True, options={'mipgap': 0.00001, 'tmlim': 900}) 
-            # Note the tmlim, not timelimit.
-            # mipgap option is essential for controlling the trade-off between solution quality and solution time. It allows you to get good, near-optimal solutions within a reasonable time frame.
-        else: 
-            results = solver.solve(model, tee=True)  # tee=True for solver output
+    if solver_num == 0:  # GLPK
+        results = solver.solve(model, tee=True, options={
+            'mipgap': 0.01,
+            'tmlim': 300  # 5-minute time limit,            
+            }) 
+        # mipgap option is essential for controlling the trade-off between solution quality and solution time. It allows you to get good, near-optimal solutions within a reasonable time frame.
+    elif solver_num == 3:  # NEOS
+        solver_manager = SolverManagerFactory('neos')  # Creates a NEOS solver manager
+        # print(solver_manager.available())  # This should list available solvers
+        results = solver_manager.solve(model, solver='cplex', tee=True)
+        #model.display()
+    elif solver_num < 4: 
+        results = solver.solve(model, tee=True)  # tee=True for solver output
+    else:
+        # Z3 solver
+        results = solver.solve(model, tee=True, solver_io=SMTSatSolver())
 
-        if results.solver.status == SolverStatus.ok:
-            print(f"Solution found using {solver_name}!")
-            print_schedule_results(model, jobs)  # Your existing function
+    if results.solver.status == SolverStatus.ok:
+        print(f"Solution found using {solver_name}!")
+        print_schedule_results(model, jobs)  # Your existing function
+        
+        if solver_num != 2:
             fig = plot_schedule(model, processing_time, machines, jobs)
             if fig:
                 plt.show()
-                # Optionally save the plot with a solver-specific name:
-                # fig.savefig(f"schedule_{solver_name}.png", bbox_inches="tight")
-        elif results.solver.termination_condition == TerminationCondition.infeasible:
-            print(f"Model is infeasible with {solver_name}.")
-        elif results.solver.termination_condition == TerminationCondition.unbounded:
-            print(f"Model is unbounded with {solver_name}.")
-        else:
-            print(f"Solver {solver_name} did not find an optimal solution. Status: {results.solver.termination_condition}")
+    elif results.solver.termination_condition == TerminationCondition.infeasible:
+        print(f"Model is infeasible with {solver_name}.")
+    elif results.solver.termination_condition == TerminationCondition.unbounded:
+        print(f"Model is unbounded with {solver_name}.")
+    else:
+        print(f"Solver {solver_name} did not find an optimal solution. Status: {results.solver.termination_condition}")
 
-    except Exception as e:
-        print(f"An error occurred with solver {solver_name}: {e}")
+except Exception as e:
+    print(f"An error occurred with solver {solver_name}: {e}")
