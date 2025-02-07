@@ -136,23 +136,8 @@ jobs2 = {
         [(1, 3), (3, 4), (5, 5), (7, 4)],			# Operation 2: Machines 1, 3, 5, and 7, with times 3, 4, 5, and 4
         [(2, 6), (4, 5), (6, 7)],     				# Operation 3: Machines 2, 4, and 6, with times 6, 5, and 7
         [(1, 4), (3, 5), (5, 6), (7, 5)],			# Operation 4: Machines 1, 3, 5, and 7, with times 4, 5, 6, and 5
-        [(2, 5), (4, 6), (6, 4), (8, 5)],			# Operation 5: Machines 2, 4, 6, and 8, with times 5, 6, 4, and 5
+        [(2, 5)],			                        # Operation 5: Machines 2 with time 5
         [(1, 6), (3, 5), (5, 7)]     				# Operation 6: Machines 1, 3, and 5, with times 6, 5, and 7
-    ],
-    11: [
-        [(1, 4), (2, 5), (3, 6), (4, 5)],			# Operation 1: Machines 1, 2, 3, and 4, with times 4, 5, 6, and 5
-        [(5, 3), (6, 4), (7, 5), (8, 4)],			# Operation 2: Machines 5, 6, 7, and 8, with times 3, 4, 5, and 4
-        [(1, 5), (3, 6), (5, 4), (7, 5)],			# Operation 3: Machines 1, 3, 5, and 7, with times 5, 6, 4, and 5
-        [(2, 4), (4, 5), (6, 6), (8, 5)],			# Operation 4: Machines 2, 4, 6, and 8, with times 4, 5, 6, and 5
-        [(1, 6), (2, 5), (3, 7), (4, 4)]			# Operation 5: Machines 1, 2, 3, and 4, with times 6, 5, 7, and 4
-    ],
-    12: [
-        [(1, 5), (3, 6), (5, 4), (7, 5), (8, 6)],	# Operation 1: Machines 1, 3, 5, 7, and 8, with times 5, 6, 4, 5, and 6
-        [(2, 4), (4, 5), (6, 6)],     				# Operation 2: Machines 2, 4, and 6, with times 4, 5, and 6
-        [(1, 6), (3, 5), (5, 7), (7, 4)],			# Operation 3: Machines 1, 3, 5, and 7, with times 6, 5, 7, and 4
-        [(2, 5), (4, 6), (6, 5), (8, 7)],			# Operation 4: Machines 2, 4, 6, and 8, with times 5, 6, 5, and 7
-        [(1, 4), (3, 5), (5, 6), (7, 5)],			# Operation 5: Machines 1, 3, 5, and 7, with times 4, 5, 6, and 5
-        [(2, 6), (4, 5), (6, 7), (8, 4)]			# Operation 6: Machines 2, 4, 6, and 8, with times 6, 5, 7, and 4
     ]
 }
 
